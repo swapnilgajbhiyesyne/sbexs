@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="en" data-bs-theme="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>BTC Options Scanner</title>
+    <link href="https://cdn.replit.com/agent/bootstrap-agent-dark-theme.min.css" rel="stylesheet">
+    <link href="https://cdn.datatables.net/1.13.6/css/dataTables.bootstrap5.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .loading-spinner {
+            display: none;
+        }
+        .form-check-input:checked {
+            background-color: var(--bs-primary);
+            border-color: var(--bs-primary);
+        }
+        .btn-group .btn {
+            min-width: 80px;
+        }
+        .table th {
+            position: sticky;
+            top: 0;
+            background-color: var(--bs-dark);
+            z-index: 10;
+        }
+        .scanner-form {
+            background-color: var(--bs-gray-900);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+            margin-bottom: 2rem;
+        }
+        .results-container {
+            background-color: var(--bs-gray-900);
+            border-radius: 0.5rem;
+            padding: 1.5rem;
+        }
+        .alert-info {
+            background-color: var(--bs-info);
+            border-color: var(--bs-info);
+            color: var(--bs-dark);
+        }
+    </style>
+</head>
+<body>
+    <div class="container-fluid py-4">
+        <div class="row">
+            <div class="col-12">
+                <h1 class="text-center mb-4">
+                    <i class="fab fa-bitcoin text-warning"></i>
+                    BTC Options Scanner
+                </h1>
+                <p class="text-center text-muted mb-4">
+                    Scan Bitcoin options with probability of profit analysis using Deribit data
+                </p>
+            </div>
+        </div>
+
+        <!-- Scanner Form -->
+        <div class="row">
+            <div class="col-12">
+                <div class="scanner-form">
+                    <form id="scannerForm">
+                        <div class="row g-3">
+                            <!-- Time Filters -->
+                            <div class="col-md-6">
+                                <h5 class="mb-3">Time Filters</h5>
+                                <div class="mb-3">
+                                    <label for="dteMax" class="form-label">Max Days to Expiry</label>
+                                    <input type="number" class="form-control" id="dteMax" placeholder="e.g., 7">
+                                    <div class="form-text">Leave empty to include all expiries</div>
+                                </div>
+                                <div class="mb-3">
+                                    <label for="expiry" class="form-label">Specific Expiry Date</label>
+                                    <input type="date" class="form-control" id="expiry">
+                                    <div class="form-text">Override DTE filter for specific date</div>
+                                </div>
+                            </div>
+
+                            <!-- Option Type and Greeks -->
+                            <div class="col-md-6">
+                                <h5 class="mb-3">Option Filters</h5>
+                                <div class="mb-3">
+                                    <label class="form-label">Option Type</label>
+                                    <div class="btn-group w-100" role="group" aria-label="Option type">
+                                        <input type="radio" class="btn-check" name="side" id="sideBoth" value="both" checked>
+                                        <label class="btn btn-outline-primary" for="sideBoth">Both</label>
+                                        <input type="radio" class="btn-check" name="side" id="sideCalls" value="calls">
+                                        <label class="btn btn-outline-primary" for="sideCalls">Calls</label>
+                                        <input type="radio" class="btn-check" name="side" id="sidePuts" value="puts">
+                                        <label class="btn btn-outline-primary" for="sidePuts">Puts</label>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label for="deltaMin" class="form-label">Min |Delta|</label>
+                                        <input type="number" class="form-control" id="deltaMin" step="0.01" placeholder="0.10">
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="deltaMax" class="form-label">Max |Delta|</label>
+                                        <input type="number" class="form-control" id="deltaMax" step="0.01" placeholder="0.30">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Premium Filters -->
+                            <div class="col-md-6">
+                                <h5 class="mb-3">Premium Filters (USD)</h5>
+                                <div class="mb-3">
+                                    <div class="form-check">
+                                        <input class="form-check-input" type="checkbox" id="premiumInBtc">
+                                        <label class="form-check-label" for="premiumInBtc">
+                                            Premiums quoted in BTC (convert to USD)
+                                        </label>
+                                    </div>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <label for="premMin" class="form-label">Min Premium</label>
+                                        <input type="number" class="form-control" id="premMin" placeholder="50">
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="premMax" class="form-label">Max Premium</label>
+                                        <input type="number" class="form-control" id="premMax" placeholder="100">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Display Options -->
+                            <div class="col-md-6">
+                                <h5 class="mb-3">Display Options</h5>
+                                <div class="mb-3">
+                                    <label for="sortBy" class="form-label">Sort By</label>
+                                    <select class="form-select" id="sortBy">
+                                        <option value="pop_delta" selected>POP (Delta)</option>
+                                        <option value="pop_logN">POP (LogNormal)</option>
+                                        <option value="iv">Implied Volatility</option>
+                                        <option value="dte">Days to Expiry</option>
+                                        <option value="strike">Strike Price</option>
+                                        <option value="premium_usd">Premium (USD)</option>
+                                        <option value="breakeven">Breakeven</option>
+                                    </select>
+                                </div>
+                                <div class="row">
+                                    <div class="col-6">
+                                        <div class="form-check">
+                                            <input class="form-check-input" type="checkbox" id="sortDesc" checked>
+                                            <label class="form-check-label" for="sortDesc">
+                                                Descending
+                                            </label>
+                                        </div>
+                                    </div>
+                                    <div class="col-6">
+                                        <label for="limitResults" class="form-label">Limit Results</label>
+                                        <input type="number" class="form-control" id="limitResults" value="200">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <hr class="my-4">
+
+                        <div class="d-flex gap-2 flex-wrap">
+                            <button type="submit" class="btn btn-primary">
+                                <i class="fas fa-search"></i> Scan Options
+                            </button>
+                            <button type="button" class="btn btn-secondary" id="exportBtn" disabled>
+                                <i class="fas fa-download"></i> Export CSV
+                            </button>
+                            <button type="button" class="btn btn-outline-secondary" id="clearBtn">
+                                <i class="fas fa-eraser"></i> Clear Filters
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading Spinner -->
+        <div class="row loading-spinner" id="loadingSpinner">
+            <div class="col-12 text-center">
+                <div class="spinner-border text-primary" role="status">
+                    <span class="visually-hidden">Loading...</span>
+                </div>
+                <p class="mt-2">Fetching options data from Deribit...</p>
+            </div>
+        </div>
+
+        <!-- Results -->
+        <div class="row" id="resultsContainer" style="display: none;">
+            <div class="col-12">
+                <div class="results-container">
+                    <div class="d-flex justify-content-between align-items-center mb-3">
+                        <h5 class="mb-0">Scan Results</h5>
+                        <div id="resultsInfo" class="text-muted"></div>
+                    </div>
+                    
+                    <div class="table-responsive">
+                        <table id="resultsTable" class="table table-striped table-hover">
+                            <thead>
+                                <tr>
+                                    <th>Instrument</th>
+                                    <th>Type</th>
+                                    <th>Expiry</th>
+                                    <th>DTE</th>
+                                    <th>Spot</th>
+                                    <th>Strike</th>
+                                    <th>IV</th>
+                                    <th>Delta</th>
+                                    <th>Premium (Native)</th>
+                                    <th>Premium (USD)</th>
+                                    <th>Breakeven</th>
+                                    <th>POP (Delta)</th>
+                                    <th>POP (LogN)</th>
+                                </tr>
+                            </thead>
+                            <tbody></tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Alert -->
+        <div class="row" id="errorContainer" style="display: none;">
+            <div class="col-12">
+                <div class="alert alert-danger" role="alert">
+                    <h6 class="alert-heading">Error</h6>
+                    <p class="mb-0" id="errorMessage"></p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Info Alert -->
+        <div class="row mt-4">
+            <div class="col-12">
+                <div class="alert alert-info" role="alert">
+                    <h6 class="alert-heading">
+                        <i class="fas fa-info-circle"></i> About POP Calculations
+                    </h6>
+                    <p class="mb-2">
+                        <strong>POP (Delta):</strong> Probability of profit based on option's delta (1 - |delta|)
+                    </p>
+                    <p class="mb-0">
+                        <strong>POP (LogNormal):</strong> Probability of profit using Black-Scholes lognormal distribution and breakeven analysis
+                    </p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/jquery.dataTables.min.js"></script>
+    <script src="https://cdn.datatables.net/1.13.6/js/dataTables.bootstrap5.min.js"></script>
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+</html>
